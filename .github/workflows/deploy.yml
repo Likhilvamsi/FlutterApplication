@@ -32,7 +32,7 @@ jobs:
           script: |
             sudo rm -rf /home/azureuser/app/frontend/*
 
-      - name: Upload new frontend files
+      - name: Upload new build to VM
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SSH_HOST }}
