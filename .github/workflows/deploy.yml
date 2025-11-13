@@ -1,0 +1,71 @@
+name: Build and Deploy Flutter Web
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "lib/**"
+      - "web/**"
+      - "pubspec.yaml"
+      - ".github/workflows/deploy-web.yml"
+
+jobs:
+  build-deploy-web:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 🧾 Checkout Code
+        uses: actions/checkout@v4
+
+      - name: ⚡ Cache Flutter Dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.pub-cache
+            /opt/hostedtoolcache/flutter
+          key: flutter-${{ runner.os }}-${{ hashFiles('pubspec.yaml') }}
+          restore-keys: flutter-${{ runner.os }}-
+
+      - name: 🛠️ Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.35.7"
+
+      - name: 📦 Install Dependencies
+        run: flutter pub get
+
+      - name: 🌐 Build Flutter Web
+        run: flutter build web --release
+
+      # 🧹 Clean remote VM folder before upload
+      - name: Clean Remote Frontend Folder
+        uses: appleboy/ssh-action@v0.1.10
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            echo "🧹 Cleaning old frontend files..."
+            sudo rm -rf ~/app/frontend/*
+
+      # 🚀 Deploy build/web → Azure VM
+      - name: Deploy Web Files to Azure VM
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "build/web/*"
+          target: "~/app/frontend/"
+          overwrite: true
+
+      - name: 🔁 Restart Nginx
+        uses: appleboy/ssh-action@v0.1.10
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            echo "🔁 Restarting Nginx..."
+            sudo systemctl restart nginx
+            echo "🎉 Web app deployed successfully!"
