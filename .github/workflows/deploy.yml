@@ -7,7 +7,7 @@ on:
       - "lib/**"
       - "web/**"
       - "pubspec.yaml"
-      - ".github/workflows/deploy-web.yml"
+      - ".github/workflows/deploy.yml"
 
 jobs:
   build-deploy-web:
