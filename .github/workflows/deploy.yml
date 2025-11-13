@@ -3,65 +3,48 @@ name: Deploy Flutter Web Frontend
 on:
   push:
     branches: ["main"]
-    paths:
-      - "app/frontend/**"
-      - "lib/**"
-      - "web/**"
-      - "pubspec.yaml"
-      - ".github/workflows/deploy.yml"
 
 jobs:
-  build-deploy-web:
+  deploy:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Checkout code
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # 2. Setup Flutter
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: "3.35.7"
 
-      # 3. Install dependencies
       - name: Install Dependencies
         run: flutter pub get
 
-      # 4. Build flutter web
-      - name: Build Web
+      - name: Build Flutter Web
         run: flutter build web --release
 
-      # 5. Clean frontend folder on VM
-      - name: Clean frontend folder on VM
+      - name: Clean old frontend files on server
         uses: appleboy/ssh-action@v0.1.10
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
-            sudo rm -rf ~/app/frontend/*
+          script: sudo rm -rf /home/azureuser/app/*
 
-      # 6. Upload new build
-      - name: Upload Web Build
+      - name: Copy build files to VM
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           source: "build/web/*"
-          target: "~/app/frontend/"
+          target: "/home/azureuser/app/frontend/"
           overwrite: true
 
-      # 7. Restart nginx
       - name: Restart Nginx
         uses: appleboy/ssh-action@v0.1.10
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
-            sudo systemctl restart nginx
-            echo "🚀 Flutter Web deployed successfully!"
-
+          script: sudo systemctl restart nginx
