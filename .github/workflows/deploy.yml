@@ -23,19 +23,20 @@ jobs:
       - name: Build Flutter Web
         run: flutter build web --release
 
-      - name: Clean old frontend files on server
+      - name: Clean old frontend files
         uses: appleboy/ssh-action@v0.1.10
         with:
           host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
+          username: azureuser
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: sudo rm -rf /home/azureuser/app/*
+          script: |
+            sudo rm -rf /home/azureuser/app/frontend/*
 
-      - name: Copy build files to VM
+      - name: Upload new frontend files
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
+          username: azureuser
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           source: "build/web/*"
           target: "/home/azureuser/app/frontend/"
@@ -45,6 +46,8 @@ jobs:
         uses: appleboy/ssh-action@v0.1.10
         with:
           host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
+          username: azureuser
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: sudo systemctl restart nginx
+          script: |
+            sudo systemctl restart nginx
+
