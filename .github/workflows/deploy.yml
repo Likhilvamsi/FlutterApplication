@@ -6,7 +6,6 @@ on:
       - main
 
 jobs:
-  # Deploy Flutter web to VM
   deploy:
     runs-on: ubuntu-latest
     steps:
@@ -18,22 +17,21 @@ jobs:
         with:
           flutter-version: "3.35.7"
 
-      - name: Install dependencies
+      - name: Install deps
         run: flutter pub get
 
-      - name: Build Flutter web
+      - name: Build web
         run: flutter build web --release
 
-      - name: Remove old frontend files on VM
+      - name: Clean remote frontend
         uses: appleboy/ssh-action@v0.1.10
         with:
           host: ${{ secrets.SSH_HOST }}
           username: azureuser
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
-            sudo rm -rf /home/azureuser/app/frontend/*
+          script: sudo rm -rf /home/azureuser/app/frontend/*
 
-      - name: Upload web build to VM
+      - name: Upload web to VM
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -49,16 +47,14 @@ jobs:
           host: ${{ secrets.SSH_HOST }}
           username: azureuser
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
-            sudo systemctl restart nginx
+          script: sudo systemctl restart nginx
 
-  # Build APK, upload to Azure Blob, and delete old blobs
   build-apk:
     runs-on: ubuntu-latest
     needs: deploy
     env:
       STORAGE_NAME: flutterapplication
-      STORAGE_CONTAINER: application
+      CONTAINER_NAME: application
       AZURE_STORAGE_KEY: ${{ secrets.AZURE_STORAGE_KEY }}
 
     steps:
@@ -70,99 +66,62 @@ jobs:
         with:
           flutter-version: "3.35.7"
 
-      - name: Install dependencies
+      - name: Install deps
         run: flutter pub get
 
       - name: Build APK (release)
         run: flutter build apk --release --no-tree-shake-icons
 
-      - name: Upload APK artifact
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: Flutter-Release-APK
           path: build/app/outputs/flutter-apk/app-release.apk
 
-      - name: Ensure Azure CLI is available
-        run: az --version
-
-      - name: Create container if not exists
+      - name: Ensure Azure CLI available
         run: |
-          az storage container create \
-            --account-name "$STORAGE_NAME" \
-            --name "$STORAGE_CONTAINER" \
-            --auth-mode key \
-            --account-key "$AZURE_STORAGE_KEY" \
-            --output none || true
+          az --version || (echo "Azure CLI not found; installing..." && curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash && az --version)
 
-      - name: Upload APK to Azure Blob
+      - name: Create container if missing
+        run: az storage container create --account-name "$STORAGE_NAME" --name "$CONTAINER_NAME" --auth-mode key --account-key "$AZURE_STORAGE_KEY" --output none || true
+
+      - name: Upload APK to blob
         run: |
           VERSION=$(date +'%Y.%m.%d-%H%M')
           FILE_NAME="barber_app-${VERSION}.apk"
-          az storage blob upload \
-            --account-name "$STORAGE_NAME" \
-            --container-name "$STORAGE_CONTAINER" \
-            --name "$FILE_NAME" \
-            --file build/app/outputs/flutter-apk/app-release.apk \
-            --auth-mode key \
-            --account-key "$AZURE_STORAGE_KEY"
-          echo "DOWNLOAD_URL=https://$STORAGE_NAME.blob.core.windows.net/$STORAGE_CONTAINER/$FILE_NAME" >> $GITHUB_ENV
+          az storage blob upload --account-name "$STORAGE_NAME" --container-name "$CONTAINER_NAME" --name "$FILE_NAME" --file build/app/outputs/flutter-apk/app-release.apk --auth-mode key --account-key "$AZURE_STORAGE_KEY"
+          echo "DOWNLOAD_URL=https://$STORAGE_NAME.blob.core.windows.net/$CONTAINER_NAME/$FILE_NAME" >> $GITHUB_ENV
 
       - name: Print download URL
         run: echo "APK available at: ${{ env.DOWNLOAD_URL }}"
 
-      - name: Cleanup - delete blobs older than 7 days
+      - name: Delete blobs older than 7 days
         run: |
-          # create a small script to list and delete old blobs
-          cat > cleanup_old_blobs.py <<'PY'
-import os
-import subprocess
-import json
+          # lists blobs as JSON and deletes any older than 7 days
+          python3 - <<'PY'
+import os, subprocess, json
 from datetime import datetime, timezone, timedelta
-
-storage_name = os.environ['STORAGE_NAME']
-container = os.environ['STORAGE_CONTAINER']
+storage = os.environ['STORAGE_NAME']
+container = os.environ['CONTAINER_NAME']
 key = os.environ['AZURE_STORAGE_KEY']
-
-# list blobs as JSON
-cmd = [
-  "az", "storage", "blob", "list",
-  "--account-name", storage_name,
-  "--container-name", container,
-  "--auth-mode", "key",
-  "--account-key", key,
-  "-o", "json"
-]
-proc = subprocess.run(cmd, capture_output=True, text=True)
-if proc.returncode != 0:
-    print("Failed to list blobs:", proc.stderr)
+cmd = ["az","storage","blob","list","--account-name",storage,"--container-name",container,"--auth-mode","key","--account-key",key,"-o","json"]
+p = subprocess.run(cmd, capture_output=True, text=True)
+if p.returncode != 0:
+    print("Could not list blobs:", p.stderr)
     exit(0)
-
-blobs = json.loads(proc.stdout)
+blobs = json.loads(p.stdout or "[]")
 cutoff = datetime.now(timezone.utc) - timedelta(days=7)
-
 for b in blobs:
     name = b.get("name")
-    props = b.get("properties", {})
-    lm = props.get("lastModified")
-    if not lm or not name:
+    lm = b.get("properties",{}).get("lastModified")
+    if not name or not lm:
         continue
-    # Azure returns e.g. '2025-11-10T12:34:56+00:00'
     try:
-        lastmod = datetime.fromisoformat(lm.replace("Z", "+00:00"))
+        lm_dt = datetime.fromisoformat(lm.replace("Z","+00:00"))
     except Exception:
         continue
-    if lastmod < cutoff:
-        print("Deleting:", name)
-        del_cmd = [
-          "az", "storage", "blob", "delete",
-          "--account-name", storage_name,
-          "--container-name", container,
-          "--name", name,
-          "--auth-mode", "key",
-          "--account-key", key
-        ]
-        subprocess.run(del_cmd)
-print("Cleanup done.")
+    if lm_dt < cutoff:
+        print("Deleting", name)
+        subprocess.run(["az","storage","blob","delete","--account-name",storage,"--container-name",container,"--name",name,"--auth-mode","key","--account-key",key])
+print("Cleanup finished")
 PY
-          python3 cleanup_old_blobs.py
-
