@@ -5,6 +5,7 @@ import '/pages/owner_page.dart';
 import '/pages/customer_page.dart';
 import '/pages/owner_details_page.dart';
 import '/pages/shop_details_page.dart';
+import '/pages/register_page.dart';
 void main() {
   setPathUrlStrategy();
   runApp(const MyApp());
@@ -21,6 +22,7 @@ class MyApp extends StatelessWidget {
       initialRoute: '/',
       routes: {
         '/': (context) => const LoginPage(),
+         "/register": (context) => const RegisterPage(),
         '/owner': (context) => const OwnerPage(),
         '/customer': (context) => const CustomerPage(),
         '/owner-details': (context) => const OwnerDetailsPage(), // 👈 NEW

@@ -35,8 +35,7 @@ class _OwnerDetailsPageState extends State<OwnerDetailsPage> {
     }
   }
 
-  // ---------------------------- API ----------------------------
-
+  // ---------------------------- APIs ----------------------------
   Future<void> fetchBarbers(int shopId) async {
     setState(() => isLoading = true);
     final data = await ApiService.getAvailableBarbers(shopId);
@@ -56,7 +55,6 @@ class _OwnerDetailsPageState extends State<OwnerDetailsPage> {
   }
 
   // ---------------------------- UI ----------------------------
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -71,7 +69,7 @@ class _OwnerDetailsPageState extends State<OwnerDetailsPage> {
         child: SafeArea(
           child: Column(
             children: [
-              // ================= HEADER =================
+              // HEADER
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 child: Row(
@@ -113,7 +111,7 @@ class _OwnerDetailsPageState extends State<OwnerDetailsPage> {
                             label: const Text("Add Menu"),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.white,
-                              foregroundColor: const Color(0xFF2dbd6e),
+                              foregroundColor: Color(0xFF2dbd6e),
                             ),
                             onPressed: () {
                               showDialog(
@@ -160,7 +158,7 @@ class _OwnerDetailsPageState extends State<OwnerDetailsPage> {
                             label: const Text("Add Barber"),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.white,
-                              foregroundColor: const Color(0xFF2dbd6e),
+                              foregroundColor: Color(0xFF2dbd6e),
                             ),
                             onPressed: () {
                               showDialog(
@@ -177,26 +175,44 @@ class _OwnerDetailsPageState extends State<OwnerDetailsPage> {
 
                       const SizedBox(height: 12),
 
-                      isLoading
-                          ? const Center(child: CircularProgressIndicator(color: Colors.white))
-                          : GridView.builder(
-                              shrinkWrap: true,
-                              physics: const NeverScrollableScrollPhysics(),
-                              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                                crossAxisCount: 4,      // 4 cards per row
-                                crossAxisSpacing: 12,
-                                mainAxisSpacing: 12,
-                                childAspectRatio: 1.6, // ⭐ PERFECT HEIGHT
-                              ),
-                              itemCount: barbers.length,
-                              itemBuilder: (_, index) {
-                                return BarberCard(
-                                  barber: barbers[index],
-                                  ownerId: ownerId!,
-                                  onUpdated: () => fetchBarbers(shopId!),
+                      // ================= RESPONSIVE BARBER GRID =================
+                      LayoutBuilder(
+                        builder: (context, constraints) {
+                          double width = constraints.maxWidth;
+
+                          int crossAxisCount = 4;
+                          double aspect = 1.6;
+
+                          if (width < 600) {
+                            crossAxisCount = 2; // Mobile
+                            aspect = 1.0;
+                          } else if (width < 900) {
+                            crossAxisCount = 3; // Tablet
+                            aspect = 1.3;
+                          }
+
+                          return isLoading
+                              ? const Center(child: CircularProgressIndicator(color: Colors.white))
+                              : GridView.builder(
+                                  shrinkWrap: true,
+                                  physics: const NeverScrollableScrollPhysics(),
+                                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                                    crossAxisCount: crossAxisCount,
+                                    crossAxisSpacing: 12,
+                                    mainAxisSpacing: 12,
+                                    childAspectRatio: aspect,
+                                  ),
+                                  itemCount: barbers.length,
+                                  itemBuilder: (_, index) {
+                                    return BarberCard(
+                                      barber: barbers[index],
+                                      ownerId: ownerId!,
+                                      onUpdated: () => fetchBarbers(shopId!),
+                                    );
+                                  },
                                 );
-                              },
-                            ),
+                        },
+                      ),
                     ],
                   ),
                 ),
@@ -211,7 +227,7 @@ class _OwnerDetailsPageState extends State<OwnerDetailsPage> {
 
 //
 // ===================================================================
-//                      BARBER CARD — FULLY FIXED
+//                      BARBER CARD
 // ===================================================================
 //
 
@@ -228,23 +244,19 @@ class BarberCard extends StatelessWidget {
   });
 
   Future<void> deleteBarber(BuildContext context) async {
-    final confirm = await showDialog(
+    final confirm = await showDialog<bool>(
       context: context,
       builder: (dialogCtx) => AlertDialog(
         title: const Text("Delete Barber"),
-        content: const Text("Are you sure?"),
+        content: const Text("Are you sure you want to delete this barber?"),
         actions: [
           TextButton(
-            onPressed: () {
-              Navigator.of(dialogCtx, rootNavigator: true).pop(false);
-            },
+            onPressed: () => Navigator.of(dialogCtx, rootNavigator: true).pop(false),
             child: const Text("Cancel"),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () {
-              Navigator.of(dialogCtx, rootNavigator: true).pop(true);
-            },
+            onPressed: () => Navigator.of(dialogCtx, rootNavigator: true).pop(true),
             child: const Text("Delete"),
           ),
         ],
@@ -253,17 +265,34 @@ class BarberCard extends StatelessWidget {
 
     if (confirm != true) return;
 
-    final msg = await ApiService.deleteBarber(barber["barber_id"], ownerId);
+    try {
+      final dynamic msg = await ApiService.deleteBarber(barber["barber_id"], ownerId);
 
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(msg.toString())));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(msg?.toString() ?? "Deleted successfully"),
+          backgroundColor: Colors.green,
+        ),
+      );
 
-    onUpdated();
+      onUpdated();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Failed to delete barber: ${e.toString()}"),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     const primary = Color(0xFF2dbd6e);
+
+    final name = barber["barber_name"]?.toString() ?? "Unknown";
+    final startTime = barber["start_time"]?.toString() ?? "-";
+    final endTime = barber["end_time"]?.toString() ?? "-";
 
     return Card(
       elevation: 3,
@@ -281,14 +310,18 @@ class BarberCard extends StatelessWidget {
             const SizedBox(height: 6),
 
             Text(
-              barber["barber_name"],
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: primary),
+              name,
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 13,
+                color: primary,
+              ),
               overflow: TextOverflow.ellipsis,
               maxLines: 1,
             ),
 
             Text(
-              "${barber['start_time']} - ${barber['end_time']}",
+              "$startTime - $endTime",
               style: const TextStyle(color: Colors.grey, fontSize: 11),
             ),
 
@@ -323,7 +356,7 @@ class BarberCard extends StatelessWidget {
 
 //
 // ===================================================================
-//                      MENU CARD (WORKING)
+//                      MENU CARD
 // ===================================================================
 //
 
@@ -341,12 +374,17 @@ class MenuCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final serviceName = menu["service_name"]?.toString() ?? "Service";
+    final description = menu["description"]?.toString() ?? "";
+    final price = menu["price"]?.toString() ?? "0";
+    final duration = menu["duration_minutes"]?.toString() ?? "-";
+
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 8),
       child: ListTile(
         leading: const Icon(Icons.cut, color: Color(0xFF2dbd6e)),
-        title: Text(menu["service_name"]),
-        subtitle: Text(menu["description"]),
+        title: Text(serviceName),
+        subtitle: Text(description),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -366,14 +404,22 @@ class MenuCard extends StatelessWidget {
             Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text("₹${menu["price"]}",
-                    style: const TextStyle(fontWeight: FontWeight.bold)),
-                Text("${menu["duration_minutes"]} min",
-                    style: const TextStyle(fontSize: 12)),
+                Text("₹$price", style: const TextStyle(fontWeight: FontWeight.bold)),
+                Text("$duration min", style: const TextStyle(fontSize: 12)),
               ],
-            )
+            ),
           ],
         ),
+        onTap: () {
+          showDialog(
+            context: context,
+            builder: (_) => EditMenuPopup(
+              menu: menu,
+              ownerId: ownerId,
+              onUpdated: onUpdated,
+            ),
+          );
+        },
       ),
     );
   }

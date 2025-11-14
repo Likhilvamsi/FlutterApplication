@@ -3,6 +3,19 @@ import 'package:http/http.dart' as http;
 
 class ApiService {
   static const String baseUrl = 'http://localhost:8000';
+static Future<dynamic> registerUser(Map data) async {
+  final response = await http.post(
+    Uri.parse('$baseUrl/users/register'),
+    headers: {"Content-Type": "application/json"},
+    body: jsonEncode(data),
+  );
+
+  if (response.statusCode == 200) {
+    return jsonDecode(response.body);
+  } else {
+    return null;
+  }
+}
 
   static Future<Map<String, dynamic>?> loginUser(
       String email, String password, String role) async {
