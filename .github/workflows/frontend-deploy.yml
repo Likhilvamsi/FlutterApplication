@@ -27,14 +27,39 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           source: "build/web/*"
-          target: "/home/azureuser/app/frontend/"
+          target: "/home/${{ secrets.SSH_USER }}/app/frontend/"
           overwrite: true
 
-      - name: Restart Nginx (optional)
+      - name: Configure NGINX Automatically
         uses: appleboy/ssh-action@v1.0.1
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            sudo systemctl restart nginx || true
+            echo "Installing NGINX if missing..."
+            sudo apt update -y
+            sudo apt install nginx -y
+
+            echo "Creating NGINX config..."
+            sudo tee /etc/nginx/sites-available/default > /dev/null <<EOF
+            server {
+                listen 80;
+                server_name _;
+                
+                root /home/${{ secrets.SSH_USER }}/app/frontend;
+                index index.html;
+
+                location / {
+                    try_files \$uri \$uri/ /index.html;
+                }
+
+                location /api/ {
+                    proxy_pass http://127.0.0.1:8000/;
+                }
+            }
+            EOF
+
+            echo "Testing and restarting NGINX..."
+            sudo nginx -t
+            sudo systemctl restart nginx
