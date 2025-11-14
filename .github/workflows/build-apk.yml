@@ -51,7 +51,7 @@ jobs:
       # Step 8: Upload APK to Azure Blob Storage
       - name: Upload APK to Azure Blob Storage
         env:
-          STORAGE_ACCOUNT: ack
+          STORAGE_ACCOUNT: flutterapplication
           CONTAINER_NAME: application
           ACCOUNT_KEY: ${{ secrets.AZURE_STORAGE_KEY }}
         run: |
