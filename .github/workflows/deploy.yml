@@ -9,30 +9,23 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@v2
         with:
           flutter-version: "3.35.7"
 
-      - name: Install deps
-        run: flutter pub get
+      - run: flutter pub get
+      - run: flutter build web --release
 
-      - name: Build web
-        run: flutter build web --release
-
-      - name: Clean remote frontend
-        uses: appleboy/ssh-action@v0.1.10
+      - uses: appleboy/ssh-action@v0.1.10
         with:
           host: ${{ secrets.SSH_HOST }}
           username: azureuser
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: sudo rm -rf /home/azureuser/app/frontend/*
 
-      - name: Upload web to VM
-        uses: appleboy/scp-action@v0.1.7
+      - uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SSH_HOST }}
           username: azureuser
@@ -41,8 +34,7 @@ jobs:
           target: /home/azureuser/app/frontend/
           overwrite: true
 
-      - name: Restart nginx
-        uses: appleboy/ssh-action@v0.1.10
+      - uses: appleboy/ssh-action@v0.1.10
         with:
           host: ${{ secrets.SSH_HOST }}
           username: azureuser
@@ -58,70 +50,26 @@ jobs:
       AZURE_STORAGE_KEY: ${{ secrets.AZURE_STORAGE_KEY }}
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@v2
         with:
           flutter-version: "3.35.7"
 
-      - name: Install deps
-        run: flutter pub get
+      - run: flutter pub get
+      - run: flutter build apk --release --no-tree-shake-icons
 
-      - name: Build APK (release)
-        run: flutter build apk --release --no-tree-shake-icons
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: Flutter-Release-APK
           path: build/app/outputs/flutter-apk/app-release.apk
 
-      - name: Ensure Azure CLI available
-        run: |
-          az --version || (echo "Azure CLI not found; installing..." && curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash && az --version)
+      - run: az storage container create --account-name "$STORAGE_NAME" --name "$CONTAINER_NAME" --auth-mode key --account-key "$AZURE_STORAGE_KEY" --output none || true
 
-      - name: Create container if missing
-        run: az storage container create --account-name "$STORAGE_NAME" --name "$CONTAINER_NAME" --auth-mode key --account-key "$AZURE_STORAGE_KEY" --output none || true
-
-      - name: Upload APK to blob
-        run: |
-          VERSION=$(date +'%Y.%m.%d-%H%M')
-          FILE_NAME="barber_app-${VERSION}.apk"
-          az storage blob upload --account-name "$STORAGE_NAME" --container-name "$CONTAINER_NAME" --name "$FILE_NAME" --file build/app/outputs/flutter-apk/app-release.apk --auth-mode key --account-key "$AZURE_STORAGE_KEY"
+      - run: |
+          VERSION=$(date +'%Y.%m.%d-%H%M'); \
+          FILE_NAME="barber_app-${VERSION}.apk"; \
+          az storage blob upload --account-name "$STORAGE_NAME" --container-name "$CONTAINER_NAME" --name "$FILE_NAME" --file build/app/outputs/flutter-apk/app-release.apk --auth-mode key --account-key "$AZURE_STORAGE_KEY"; \
           echo "DOWNLOAD_URL=https://$STORAGE_NAME.blob.core.windows.net/$CONTAINER_NAME/$FILE_NAME" >> $GITHUB_ENV
 
-      - name: Print download URL
-        run: echo "APK available at: ${{ env.DOWNLOAD_URL }}"
-
-      - name: Delete blobs older than 7 days
-        run: |
-          # lists blobs as JSON and deletes any older than 7 days
-          python3 - <<'PY'
-import os, subprocess, json
-from datetime import datetime, timezone, timedelta
-storage = os.environ['STORAGE_NAME']
-container = os.environ['CONTAINER_NAME']
-key = os.environ['AZURE_STORAGE_KEY']
-cmd = ["az","storage","blob","list","--account-name",storage,"--container-name",container,"--auth-mode","key","--account-key",key,"-o","json"]
-p = subprocess.run(cmd, capture_output=True, text=True)
-if p.returncode != 0:
-    print("Could not list blobs:", p.stderr)
-    exit(0)
-blobs = json.loads(p.stdout or "[]")
-cutoff = datetime.now(timezone.utc) - timedelta(days=7)
-for b in blobs:
-    name = b.get("name")
-    lm = b.get("properties",{}).get("lastModified")
-    if not name or not lm:
-        continue
-    try:
-        lm_dt = datetime.fromisoformat(lm.replace("Z","+00:00"))
-    except Exception:
-        continue
-    if lm_dt < cutoff:
-        print("Deleting", name)
-        subprocess.run(["az","storage","blob","delete","--account-name",storage,"--container-name",container,"--name",name,"--auth-mode","key","--account-key",key])
-print("Cleanup finished")
-PY
+      - run: echo "APK available at: ${{ env.DOWNLOAD_URL }}"
