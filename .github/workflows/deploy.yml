@@ -2,7 +2,8 @@ name: Build and Deploy Flutter (Web + APK)
 
 on:
   push:
-    branches: ["main"]
+    branches:
+      - main
 
 jobs:
   # =========================================================
@@ -18,7 +19,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: "3.35.7"
+          flutter-version: '3.35.7'
 
       - name: Install Dependencies
         run: flutter pub get
@@ -41,8 +42,8 @@ jobs:
           host: ${{ secrets.SSH_HOST }}
           username: azureuser
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: "build/web/*"
-          target: "/home/azureuser/app/frontend/"
+          source: build/web/*
+          target: /home/azureuser/app/frontend/
           overwrite: true
 
       - name: Restart Nginx
@@ -53,7 +54,7 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             sudo systemctl restart nginx
-            echo "Web deployed successfully!"
+            echo "Web deployed successfully"
 
   # =========================================================
   # 📱 BUILD & UPLOAD ANDROID APK TO AZURE BLOB STORAGE
@@ -69,7 +70,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: "3.35.7"
+          flutter-version: '3.35.7'
 
       - name: Install Dependencies
         run: flutter pub get
@@ -92,25 +93,25 @@ jobs:
             VERSION=$(date +'%Y.%m.%d-%H%M')
             FILE_NAME="barber_app-${VERSION}.apk"
 
-            # create container (safe even if it exists)
+            # Create container if not exists
             az storage container create \
               --account-name flutterapplication \
               --name application \
               --auth-mode key \
               --account-key "${{ secrets.AZURE_STORAGE_KEY }}"
 
-            # upload APK
+            # Upload APK file
             az storage blob upload \
               --account-name flutterapplication \
               --container-name application \
-              --name "${FILE_NAME}" \
+              --name "$FILE_NAME" \
               --file build/app/outputs/flutter-apk/app-release.apk \
               --auth-mode key \
               --account-key "${{ secrets.AZURE_STORAGE_KEY }}"
 
-            # generate URL
+            # Prepare download URL
             URL="https://flutterapplication.blob.core.windows.net/application/${FILE_NAME}"
-            echo "DOWNLOAD_URL=${URL}" >> $GITHUB_ENV
+            echo "DOWNLOAD_URL=$URL" >> $GITHUB_ENV
 
       - name: Print APK Download URL
-        run: echo "✔ APK available at: ${{ env.DOWNLOAD_URL }}"
+        run: echo "APK available at: ${{ env.DOWNLOAD_URL }}"
