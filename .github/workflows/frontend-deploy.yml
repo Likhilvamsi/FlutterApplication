@@ -20,16 +20,19 @@ jobs:
       - name: Build Flutter Web
         run: flutter build web --release
 
+      # ✅ FIXED: Upload correct frontend files without nesting build/
       - name: Upload Frontend to Server
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: "build/web/*"
+          source: "build/web/**"
           target: "/home/${{ secrets.SSH_USER }}/app/frontend/"
           overwrite: true
+          strip_components: 2
 
+      # ✅ Auto setup & configure NGINX
       - name: Configure NGINX Automatically
         uses: appleboy/ssh-action@v1.0.1
         with:
@@ -37,16 +40,16 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            echo "Installing NGINX if missing..."
+            echo "Installing NGINX..."
             sudo apt update -y
             sudo apt install nginx -y
 
-            echo "Creating NGINX config..."
+            echo "Configuring NGINX..."
             sudo tee /etc/nginx/sites-available/default > /dev/null <<EOF
             server {
                 listen 80;
                 server_name _;
-                
+
                 root /home/${{ secrets.SSH_USER }}/app/frontend;
                 index index.html;
 
@@ -54,6 +57,7 @@ jobs:
                     try_files \$uri \$uri/ /index.html;
                 }
 
+                # Proxy for FastAPI backend
                 location /api/ {
                     proxy_pass http://127.0.0.1:8000/;
                 }
