@@ -92,21 +92,21 @@ jobs:
             VERSION=$(date +'%Y.%m.%d-%H%M')
             FILE_NAME="barber_app-${VERSION}.apk"
 
-            # create container (safe to run even if it exists)
+            # create container (safe even if it exists)
             az storage container create \
               --account-name flutterapplication \
               --name application \
               --auth-mode key \
-              --account-key ${{ secrets.AZURE_STORAGE_KEY }}
+              --account-key "${{ secrets.AZURE_STORAGE_KEY }}"
 
             # upload APK
             az storage blob upload \
               --account-name flutterapplication \
               --container-name application \
-              --name $FILE_NAME \
+              --name "${FILE_NAME}" \
               --file build/app/outputs/flutter-apk/app-release.apk \
               --auth-mode key \
-              --account-key ${{ secrets.AZURE_STORAGE_KEY }}
+              --account-key "${{ secrets.AZURE_STORAGE_KEY }}"
 
             # generate URL
             URL="https://flutterapplication.blob.core.windows.net/application/${FILE_NAME}"
