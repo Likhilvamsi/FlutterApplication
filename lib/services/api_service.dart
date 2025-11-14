@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 
 class ApiService {
   // Backend base URL (nginx reverse proxy)
-  static const String baseUrl = 'http://48.221.112.220/api';
+  static const String baseUrl = 'http://48.221.112.220/api/';
 
   // -----------------------------
   // USERS
