@@ -19,7 +19,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.35.7'
+          flutter-version: "3.35.7"
 
       - name: Install Dependencies
         run: flutter pub get
@@ -36,7 +36,7 @@ jobs:
           script: |
             sudo rm -rf /home/azureuser/app/frontend/*
 
-      - name: Upload new build to VM
+      - name: Upload web build to VM
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -56,8 +56,9 @@ jobs:
             sudo systemctl restart nginx
             echo "Web deployed successfully"
 
+
   # =========================================================
-  # 📱 BUILD & UPLOAD ANDROID APK TO AZURE BLOB STORAGE
+  # 📱 BUILD & UPLOAD ANDROID APK
   # =========================================================
   build-apk:
     runs-on: ubuntu-latest
@@ -70,7 +71,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.35.7'
+          flutter-version: "3.35.7"
 
       - name: Install Dependencies
         run: flutter pub get
@@ -78,7 +79,7 @@ jobs:
       - name: Build APK (Release)
         run: flutter build apk --release --no-tree-shake-icons
 
-      - name: Upload APK as Artifact
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Flutter-Release-APK
@@ -88,30 +89,58 @@ jobs:
         uses: azure/CLI@v2
         with:
           inlineScript: |
-            echo "Uploading APK to Azure Blob Storage..."
+            echo "Starting APK Upload..."
 
             VERSION=$(date +'%Y.%m.%d-%H%M')
             FILE_NAME="barber_app-${VERSION}.apk"
 
-            # Create container if not exists
             az storage container create \
               --account-name flutterapplication \
               --name application \
               --auth-mode key \
-              --account-key "${{ secrets.AZURE_STORAGE_KEY }}"
+              --account-key ${{ secrets.AZURE_STORAGE_KEY }}
 
-            # Upload APK file
             az storage blob upload \
               --account-name flutterapplication \
               --container-name application \
-              --name "$FILE_NAME" \
+              --name $FILE_NAME \
               --file build/app/outputs/flutter-apk/app-release.apk \
               --auth-mode key \
-              --account-key "${{ secrets.AZURE_STORAGE_KEY }}"
+              --account-key ${{ secrets.AZURE_STORAGE_KEY }}
 
-            # Prepare download URL
-            URL="https://flutterapplication.blob.core.windows.net/application/${FILE_NAME}"
-            echo "DOWNLOAD_URL=$URL" >> $GITHUB_ENV
+            DOWNLOAD_URL="https://flutterapplication.blob.core.windows.net/application/$FILE_NAME"
+            echo "DOWNLOAD_URL=$DOWNLOAD_URL" >> $GITHUB_ENV
 
-      - name: Print APK Download URL
+      - name: Print Download URL
         run: echo "APK available at: ${{ env.DOWNLOAD_URL }}"
+
+      # =========================================================
+      # 🧹 AUTO DELETE OLD APKS (OLDER THAN 7 DAYS)
+      # =========================================================
+      - name: Delete old APKs from Azure Blob Storage
+        uses: azure/CLI@v2
+        with:
+          inlineScript: |
+            echo "Deleting old APKs older than 7 days..."
+
+            SEVEN_DAYS_AGO=$(date -d "-7 days" +"%Y-%m-%dT%H:%MZ")
+
+            az storage blob list \
+              --account-name flutterapplication \
+              --container-name application \
+              --auth-mode key \
+              --account-key ${{ secrets.AZURE_STORAGE_KEY }} \
+              --query "[?properties.lastModified<'$SEVEN_DAYS_AGO'].[name]" \
+              -o tsv | while read BLOB_NAME; do
+                if [ ! -z "$BLOB_NAME" ]; then
+                  echo "Deleting: $BLOB_NAME"
+                  az storage blob delete \
+                    --account-name flutterapplication \
+                    --container-name application \
+                    --name "$BLOB_NAME" \
+                    --auth-mode key \
+                    --account-key ${{ secrets.AZURE_STORAGE_KEY }}
+                fi
+              done
+
+            echo "Cleanup Completed!"
