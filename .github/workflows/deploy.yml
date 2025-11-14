@@ -2,8 +2,7 @@ name: Build and Deploy Flutter (Web + APK)
 
 on:
   push:
-    branches:
-      - main
+    branches: [ "main" ]
 
 jobs:
   deploy:
@@ -66,10 +65,6 @@ jobs:
 
       - run: az storage container create --account-name "$STORAGE_NAME" --name "$CONTAINER_NAME" --auth-mode key --account-key "$AZURE_STORAGE_KEY" --output none || true
 
-      - run: |
-          VERSION=$(date +'%Y.%m.%d-%H%M'); \
-          FILE_NAME="barber_app-${VERSION}.apk"; \
-          az storage blob upload --account-name "$STORAGE_NAME" --container-name "$CONTAINER_NAME" --name "$FILE_NAME" --file build/app/outputs/flutter-apk/app-release.apk --auth-mode key --account-key "$AZURE_STORAGE_KEY"; \
-          echo "DOWNLOAD_URL=https://$STORAGE_NAME.blob.core.windows.net/$CONTAINER_NAME/$FILE_NAME" >> $GITHUB_ENV
+      - run: VERSION=$(date +'%Y.%m.%d-%H%M');FILE_NAME="barber_app-$VERSION.apk";az storage blob upload --account-name "$STORAGE_NAME" --container-name "$CONTAINER_NAME" --name "$FILE_NAME" --file build/app/outputs/flutter-apk/app-release.apk --auth-mode key --account-key "$AZURE_STORAGE_KEY";echo "DOWNLOAD_URL=https://$STORAGE_NAME.blob.core.windows.net/$CONTAINER_NAME/$FILE_NAME" >> $GITHUB_ENV
 
       - run: echo "APK available at: ${{ env.DOWNLOAD_URL }}"
