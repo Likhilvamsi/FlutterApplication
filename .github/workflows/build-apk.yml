@@ -11,42 +11,37 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1: Checkout repository
+      # Checkout code
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Step 2: Install correct Flutter version (3.38.1 = Dart 3.8.1)
-      - name: Set up Flutter 3.38.1
+      # Install correct Flutter SDK (required by your project)
+      - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.38.1'
-          channel: 'stable'
+          flutter-version: "3.38.1"   # REQUIRED for SDK ^3.8.1
 
-      # Step 3: Verify Flutter installation
-      - name: Flutter doctor
-        run: flutter doctor -v
-
-      # Step 4: Install dependencies
+      # Get dependencies
       - name: Install dependencies
         run: flutter pub get
 
-      # Step 5: Build release APK
+      # Build release APK
       - name: Build release APK
         run: flutter build apk --release
 
-      # Step 6: Upload APK to GitHub artifacts
+      # Upload APK as artifact
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: app-release-apk
           path: build/app/outputs/flutter-apk/app-release.apk
 
-      # Step 7: Install Azure CLI
+      # Install Azure CLI
       - name: Install Azure CLI
         run: |
           curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
 
-      # Step 8: Upload APK to Azure Blob Storage
+      # Upload APK to Azure Blob Storage
       - name: Upload APK to Azure Blob Storage
         uses: azure/CLI@v2
         with:
@@ -56,24 +51,24 @@ jobs:
             APK_FILE="build/app/outputs/flutter-apk/app-release.apk"
             BLOB_NAME="app-release-$(date +'%Y-%m-%d_%H-%M-%S').apk"
 
-            echo "🔹 Ensure container exists"
+            echo "📁 Checking if container exists..."
             az storage container create \
               --account-name $STORAGE_ACCOUNT \
               --name $CONTAINER_NAME \
-              --account-key "${{ secrets.AZURE_STORAGE_KEY }}" \
               --auth-mode key \
+              --account-key "${{ secrets.AZURE_STORAGE_KEY }}" \
               --public-access blob
 
-            echo "🔹 Uploading APK..."
+            echo "⬆ Uploading APK to Azure Blob..."
             az storage blob upload \
               --account-name $STORAGE_ACCOUNT \
               --container-name $CONTAINER_NAME \
               --name $BLOB_NAME \
               --file $APK_FILE \
-              --account-key "${{ secrets.AZURE_STORAGE_KEY }}" \
               --auth-mode key \
+              --account-key "${{ secrets.AZURE_STORAGE_KEY }}" \
               --overwrite
 
-            echo "✅ Upload successful!"
-            echo "🌐 Download URL:"
+            echo "✅ Upload Success!"
+            echo "🌍 APK URL:"
             echo "https://$STORAGE_ACCOUNT.blob.core.windows.net/$CONTAINER_NAME/$BLOB_NAME"
