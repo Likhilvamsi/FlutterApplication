@@ -11,32 +11,30 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1: Checkout code
+      # Step 1: Checkout repository
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Step 2: Set up JDK (required for Flutter Android build)
-      - name: Set up JDK 17
-        uses: actions/setup-java@v3
-        with:
-          java-version: "17"
-          distribution: "temurin"
-
-      # Step 3: Set up Flutter SDK
-      - name: Set up Flutter
+      # Step 2: Install correct Flutter version (3.38.1 = Dart 3.8.1)
+      - name: Set up Flutter 3.38.1
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: "3.24.4"
+          flutter-version: '3.38.1'
+          channel: 'stable'
+
+      # Step 3: Verify Flutter installation
+      - name: Flutter doctor
+        run: flutter doctor -v
 
       # Step 4: Install dependencies
       - name: Install dependencies
         run: flutter pub get
 
-      # Step 5: Build APK
+      # Step 5: Build release APK
       - name: Build release APK
         run: flutter build apk --release
 
-      # Step 6: Upload APK as GitHub artifact
+      # Step 6: Upload APK to GitHub artifacts
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
@@ -50,30 +48,32 @@ jobs:
 
       # Step 8: Upload APK to Azure Blob Storage
       - name: Upload APK to Azure Blob Storage
-        env:
-          STORAGE_ACCOUNT: flutterapplication
-          CONTAINER_NAME: application
-          ACCOUNT_KEY: ${{ secrets.AZURE_STORAGE_KEY }}
-        run: |
-          APK_FILE="build/app/outputs/flutter-apk/app-release.apk"
-          BLOB_NAME="app-release-$(date +'%Y-%m-%d_%H-%M-%S').apk"
+        uses: azure/CLI@v2
+        with:
+          inlineScript: |
+            STORAGE_ACCOUNT="flutterapplication"
+            CONTAINER_NAME="application"
+            APK_FILE="build/app/outputs/flutter-apk/app-release.apk"
+            BLOB_NAME="app-release-$(date +'%Y-%m-%d_%H-%M-%S').apk"
 
-          echo "Creating container if not exists..."
-          az storage container create \
-            --name $CONTAINER_NAME \
-            --account-name $STORAGE_ACCOUNT \
-            --account-key $ACCOUNT_KEY \
-            --public-access blob
+            echo "🔹 Ensure container exists"
+            az storage container create \
+              --account-name $STORAGE_ACCOUNT \
+              --name $CONTAINER_NAME \
+              --account-key "${{ secrets.AZURE_STORAGE_KEY }}" \
+              --auth-mode key \
+              --public-access blob
 
-          echo "Uploading APK..."
-          az storage blob upload \
-            --account-name $STORAGE_ACCOUNT \
-            --container-name $CONTAINER_NAME \
-            --name $BLOB_NAME \
-            --file $APK_FILE \
-            --account-key $ACCOUNT_KEY \
-            --overwrite
+            echo "🔹 Uploading APK..."
+            az storage blob upload \
+              --account-name $STORAGE_ACCOUNT \
+              --container-name $CONTAINER_NAME \
+              --name $BLOB_NAME \
+              --file $APK_FILE \
+              --account-key "${{ secrets.AZURE_STORAGE_KEY }}" \
+              --auth-mode key \
+              --overwrite
 
-          echo "Upload completed successfully!"
-          echo "Public APK URL:"
-          echo "https://$STORAGE_ACCOUNT.blob.core.windows.net/$CONTAINER_NAME/$BLOB_NAME"
+            echo "✅ Upload successful!"
+            echo "🌐 Download URL:"
+            echo "https://$STORAGE_ACCOUNT.blob.core.windows.net/$CONTAINER_NAME/$BLOB_NAME"
