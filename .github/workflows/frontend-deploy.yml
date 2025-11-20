@@ -15,12 +15,15 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          channel: "stable"
+          channel: stable
+
+      - name: Flutter Pub Get
+        run: flutter pub get
 
       - name: Build Flutter Web
         run: flutter build web --release
 
-      # ✅ FIXED: Upload correct frontend files without nesting build/
+      # Upload built Flutter web app to server
       - name: Upload Frontend to Server
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -32,7 +35,7 @@ jobs:
           overwrite: true
           strip_components: 2
 
-      # ✅ Auto setup & configure NGINX
+      # Install & configure NGINX to serve Flutter web + proxy /api to backend
       - name: Configure NGINX Automatically
         uses: appleboy/ssh-action@v1.0.1
         with:
@@ -42,19 +45,19 @@ jobs:
           script: |
             echo "Installing NGINX..."
             sudo apt update -y
-            sudo apt install nginx -y
+            sudo apt install -y nginx
 
             echo "Configuring NGINX..."
-            sudo tee /etc/nginx/sites-available/default > /dev/null <<EOF
+            sudo tee /etc/nginx/sites-available/default > /dev/null << 'EOF'
             server {
                 listen 80;
                 server_name _;
 
-                root /home/${{ secrets.SSH_USER }}/app/frontend;
+                root /home/${SSH_USER}/app/frontend;
                 index index.html;
 
                 location / {
-                    try_files \$uri \$uri/ /index.html;
+                    try_files $uri $uri/ /index.html;
                 }
 
                 # Proxy for FastAPI backend
@@ -64,6 +67,10 @@ jobs:
             }
             EOF
 
+            # Replace placeholder with real user
+            sudo sed -i "s/\${SSH_USER}/${USER}/g" /etc/nginx/sites-available/default
+
             echo "Testing and restarting NGINX..."
             sudo nginx -t
             sudo systemctl restart nginx
+            sudo systemctl enable nginx
