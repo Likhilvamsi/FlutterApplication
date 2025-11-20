@@ -2,8 +2,8 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class ApiService {
-  // Correct base URL (NO trailing slash)
-  static const String baseUrl = 'http://48.221.112.220/api';
+  // ✅ Correct base URL WITH port 8000 (NO /api here)
+  static const String baseUrl = 'http://48.221.112.220:8000';
 
   // -----------------------------
   // USERS
@@ -115,7 +115,8 @@ class ApiService {
     return response.statusCode == 200 ? jsonDecode(response.body) : null;
   }
 
-  static Future<bool> createShop(Map<String, dynamic> shopData, int ownerId) async {
+  static Future<bool> createShop(
+      Map<String, dynamic> shopData, int ownerId) async {
     final url = Uri.parse('$baseUrl/create?owner_id=$ownerId');
 
     print("CREATE SHOP URL: $url");
@@ -180,7 +181,8 @@ class ApiService {
     return response.statusCode == 200 ? jsonDecode(response.body) : null;
   }
 
-  static Future<bool> addBarber(Map<String, dynamic> barberData, int shopId) async {
+  static Future<bool> addBarber(
+      Map<String, dynamic> barberData, int shopId) async {
     final url = Uri.parse('$baseUrl/barbers/add/$shopId');
     print("ADD BARBER URL: $url");
     print("BODY: ${jsonEncode(barberData)}");
@@ -199,7 +201,8 @@ class ApiService {
 
   static Future<bool> updateBarber(
       int barberId, int ownerId, Map<String, dynamic> body) async {
-    final url = Uri.parse('$baseUrl/barbers/update/$barberId?owner_id=$ownerId');
+    final url =
+        Uri.parse('$baseUrl/barbers/update/$barberId?owner_id=$ownerId');
 
     print("UPDATE BARBER URL: $url");
     print("BODY: ${jsonEncode(body)}");
@@ -217,7 +220,8 @@ class ApiService {
   }
 
   static Future<String> deleteBarber(int barberId, int ownerId) async {
-    final url = Uri.parse('$baseUrl/barbers/delete/$barberId?owner_id=$ownerId');
+    final url =
+        Uri.parse('$baseUrl/barbers/delete/$barberId?owner_id=$ownerId');
 
     print("DELETE BARBER URL: $url");
 
