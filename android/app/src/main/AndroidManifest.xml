@@ -1,5 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- ADD THIS LINE -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <application
         android:label="server_app"
         android:name="${applicationName}"
